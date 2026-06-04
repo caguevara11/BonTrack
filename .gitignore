@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# local environment
+.env.local
+web/.env.local
+
+# generated caches and local tooling state
+.agents/
+.codegraph/
+.codex/
+.claude/
+skills-lock.json
+.next/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# OS/editor noise
+.DS_Store

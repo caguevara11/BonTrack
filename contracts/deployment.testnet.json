@@ -1,0 +1,11 @@
+{
+  "network": "testnet",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "networkPassphrase": "Test SDF Network ; September 2015",
+  "contractId": "CBCMZ5LYDCZHA7VFC5UT5EOYVCUN3ZUK3YWYJV6RW4RJYCEB763NOSKR",
+  "systemAddress": "GBGI5LNYHU3OCEADBHZPKDWB4M5QILGQX2JXEB43ADOOCBJJZUD5QEMQ",
+  "deployedAt": "2026-06-03",
+  "upgradedAt": "2026-06-04",
+  "wasmHash": "c385a80219ab3bb17abb7dec47670ece96c8c0ad584b70b9369220d01e96271f",
+  "upgradeTx": "dc177e42046a2c18649cf74288e80fd91ef36ec67065a42f3be42755bcccafc7"
+}
