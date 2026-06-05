@@ -225,3 +225,116 @@ form.validate input:user-invalid {
     animation: none;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   Sprint-03 — Overhaul de diseño: tablero, densidad y "tinta nocturna".
+   ──────────────────────────────────────────────────────────────────────── */
+
+/*
+  Tema oscuro scoped "tinta nocturna" para la sala de control del TSE.
+  Se aplica a una superficie con fondo propio → seguro fijar color-scheme
+  (modern-web-guidance: component-specific-light-dark-theme). Redefine los
+  tokens de marca en oscuro; los badges de estado siguen siendo legibles
+  (fondo claro + texto oscuro) incluso sobre la tinta.
+*/
+.theme-ink {
+  color-scheme: dark;
+  --background: oklch(0.21 0.038 248);
+  --foreground: oklch(0.96 0.01 95);
+  --card: oklch(0.255 0.042 248);
+  --card-foreground: oklch(0.96 0.01 95);
+  --popover: oklch(0.255 0.042 248);
+  --popover-foreground: oklch(0.96 0.01 95);
+  --primary: oklch(0.8 0.13 80);
+  --primary-foreground: oklch(0.24 0.04 250);
+  --secondary: oklch(0.3 0.04 248);
+  --secondary-foreground: oklch(0.93 0.012 95);
+  --muted: oklch(0.3 0.035 248);
+  --muted-foreground: oklch(0.74 0.025 245);
+  --accent: oklch(0.8 0.13 80);
+  --accent-foreground: oklch(0.24 0.04 250);
+  --destructive: oklch(0.7 0.19 24);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.8 0.13 80);
+}
+
+/* Sobre la tinta, la retícula de papel se invierte a un punteado tenue claro. */
+.theme-ink {
+  background-color: var(--background);
+  background-image: radial-gradient(oklch(0.8 0.13 80 / 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/*
+  Contenedor de consulta de tamaño-consciente (size-aware-styling): cualquier
+  tarjeta/panel reubicable decide su layout por SU ancho, no el del viewport.
+*/
+.cq {
+  container-type: inline-size;
+}
+
+/*
+  Grilla de tarjetas de bono del portafolio. auto-fill + minmax para usar el
+  ancho disponible (css-layout §3); subgrid para que título, datos y acciones
+  de cada tarjeta queden alineados entre hermanas (resuelve el borde dentado).
+  La declaración explícita previa es el fallback de mismo-cascade.
+*/
+.bono-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+.bono-grid > * {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-rows: subgrid;
+  grid-row: span 3;
+}
+
+/*
+  Listas largas (resultados de trazabilidad, mis bonos) sin jank: aísla el
+  reflow y mantiene INP bajo (interactions-in-complex-layouts). Degrada con
+  @supports a containment manual en navegadores sin content-visibility.
+*/
+.cv-list > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 5rem;
+}
+@supports not (content-visibility: auto) {
+  .cv-list > * {
+    contain: layout style paint;
+  }
+}
+
+/*
+  Panel con scroll propio: reserva la barra (sin layout shift) y corta el
+  encadenamiento de scroll hacia la página (css-layout §6).
+*/
+.panel-scroll {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+/* Sombra de panel por capas — profundidad de "documento sobre escritorio". */
+.shadow-panel {
+  box-shadow:
+    0 1px 2px oklch(0.24 0.035 248 / 0.06),
+    0 8px 24px -12px oklch(0.24 0.035 248 / 0.18);
+}
+
+/* Banda superior decorativa de los KPI: filete dorado de sello. */
+.kpi-accent::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  block-size: 2px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--accent),
+    transparent
+  );
+}

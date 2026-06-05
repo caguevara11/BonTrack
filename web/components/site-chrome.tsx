@@ -52,12 +52,22 @@ export function SiteHeader({
 }: {
   subtitle?: string;
   right?: ReactNode;
-  width?: "2xl" | "3xl" | "5xl";
+  width?: "2xl" | "3xl" | "5xl" | "7xl";
 }) {
-  const maxw = { "2xl": "max-w-2xl", "3xl": "max-w-3xl", "5xl": "max-w-5xl" }[width];
+  const maxw = {
+    "2xl": "max-w-2xl",
+    "3xl": "max-w-3xl",
+    "5xl": "max-w-5xl",
+    "7xl": "max-w-7xl",
+  }[width];
   return (
     <header className="relative bg-primary">
-      <div className={cn("mx-auto flex items-center justify-between gap-4 px-6 py-3.5", maxw)}>
+      <div
+        className={cn(
+          "mx-auto flex items-center justify-between gap-4 px-4 py-3.5 sm:px-6 lg:px-8",
+          maxw,
+        )}
+      >
         <Brand subtitle={subtitle} />
         {right && <div className="flex items-center gap-2">{right}</div>}
       </div>
