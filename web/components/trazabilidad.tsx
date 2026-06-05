@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,11 +17,12 @@ import {
 } from "@/components/ui/select";
 import { Reveal } from "@/components/reveal";
 import { ResultadoBono } from "@/components/bono-result";
-import type { Resultado } from "@/app/api/trazabilidad/route";
+import type { TrazabilidadResponse } from "@/app/api/trazabilidad/route";
 
 type Modo = "bono" | "cedula";
 type Catalogo = { partidos: string[]; series: string[] };
 const ALL_VALUE = "__all__";
+const PAGE_SIZE = 10;
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -46,21 +47,24 @@ export function TrazabilidadSearch() {
   const series = catalogo?.series ?? [];
 
   const busqueda = useMutation({
-    mutationFn: () => {
+    mutationFn: (page: number = 1) => {
       const params = new URLSearchParams({ mode: modo });
       if (modo === "bono") {
         if (partido) params.set("partido", partido);
         if (serie) params.set("serie", serie);
         if (numero) params.set("numero", numero);
+        params.set("page", String(page));
+        params.set("pageSize", String(PAGE_SIZE));
         if (partido && serie && numero) params.set("verify", "chain");
       } else {
         params.set("cedula", cedula);
       }
-      return fetchJson<{ resultados: Resultado[] }>(`/api/trazabilidad?${params}`);
+      return fetchJson<TrazabilidadResponse>(`/api/trazabilidad?${params}`);
     },
   });
 
   const resultados = busqueda.data?.resultados;
+  const pagination = busqueda.data?.pagination;
 
   return (
     <div className="space-y-6">
@@ -69,7 +73,7 @@ export function TrazabilidadSearch() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              busqueda.mutate();
+              busqueda.mutate(1);
             }}
           >
             <RadioGroup
@@ -79,13 +83,16 @@ export function TrazabilidadSearch() {
             >
               {(
                 [
-                  ["bono", "Bono / partido"],
+                  ["bono", "Bono"],
                   ["cedula", "Cédula de tenedor"],
                 ] as const
               ).map(([value, label]) => (
                 <div key={value} className="flex items-center gap-2">
                   <RadioGroupItem value={value} id={`modo-${value}`} />
-                  <Label htmlFor={`modo-${value}`} className="cursor-pointer font-normal">
+                  <Label
+                    htmlFor={`modo-${value}`}
+                    className="cursor-pointer font-normal"
+                  >
                     {label}
                   </Label>
                 </div>
@@ -95,8 +102,20 @@ export function TrazabilidadSearch() {
             <div className="flex flex-wrap items-end gap-3">
               {modo === "bono" && (
                 <>
-                  <FieldSelect label="Partido" value={partido} onChange={setPartido} options={partidos} allowAll />
-                  <FieldSelect label="Serie" value={serie} onChange={setSerie} options={series} allowAll />
+                  <FieldSelect
+                    label="Partido"
+                    value={partido}
+                    onChange={setPartido}
+                    options={partidos}
+                    allowAll
+                  />
+                  <FieldSelect
+                    label="Serie"
+                    value={serie}
+                    onChange={setSerie}
+                    options={series}
+                    allowAll
+                  />
                   <div className="grid gap-1.5">
                     <Label htmlFor="numero">Número</Label>
                     <Input
@@ -151,6 +170,41 @@ export function TrazabilidadSearch() {
         </Card>
       )}
 
+      {pagination && resultados && resultados.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+          <span>
+            Mostrando {resultados.length} de {pagination.total} bonos
+          </span>
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => busqueda.mutate(pagination.page - 1)}
+                disabled={busqueda.isPending || pagination.page <= 1}
+              >
+                <ChevronLeft className="size-4" />
+                Anterior
+              </Button>
+              <span className="tnum text-xs">
+                Página {pagination.page} de {pagination.totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => busqueda.mutate(pagination.page + 1)}
+                disabled={busqueda.isPending || pagination.page >= pagination.totalPages}
+              >
+                Siguiente
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {resultados?.map((r, i) => (
         <Reveal key={r.bono.token_id} index={i}>
           <ResultadoBono resultado={r} />
@@ -176,7 +230,10 @@ function FieldSelect({
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
-      <Select value={value || ALL_VALUE} onValueChange={(v) => onChange(v === ALL_VALUE ? "" : v)}>
+      <Select
+        value={value || ALL_VALUE}
+        onValueChange={(v) => onChange(v === ALL_VALUE ? "" : v)}
+      >
         <SelectTrigger className="min-w-[7rem]">
           <SelectValue placeholder={`Elegir ${label.toLowerCase()}`} />
         </SelectTrigger>

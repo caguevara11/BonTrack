@@ -181,3 +181,47 @@ form.validate input:user-invalid {
   border-color: var(--destructive);
   background-color: color-mix(in oklab, var(--destructive) 6%, transparent);
 }
+
+/* Resultado de bono: ficha compacta con detalles progresivos. */
+.bono-result {
+  container-type: inline-size;
+}
+
+.bono-result-facts {
+  grid-template-columns: 1fr;
+}
+
+@container (min-width: 560px) {
+  .bono-result-facts {
+    grid-template-columns: minmax(8rem, 0.85fr) minmax(12rem, 1.45fr) minmax(8rem, 0.8fr);
+  }
+}
+
+.bono-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.bono-disclosure[open] {
+  background: color-mix(in oklab, var(--card) 78%, var(--secondary));
+}
+
+.bono-disclosure-panel {
+  animation: disclosure-enter 160ms ease-out;
+}
+
+@keyframes disclosure-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bono-disclosure-panel {
+    animation: none;
+  }
+}

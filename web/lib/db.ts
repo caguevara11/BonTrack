@@ -31,6 +31,11 @@ export type EventoRow = {
   registrado_por: string | null;
 };
 
+export type PaginatedBonos = {
+  bonos: BonoRow[];
+  total: number;
+};
+
 /** Etiqueta legible de un tenedor para mostrar en la trazabilidad. */
 export function formatHolderLabel(t: {
   tipo: string;
@@ -128,16 +133,22 @@ export async function getBonoByIdentidad(
 export async function getBonosByFiltros(
   admin: SupabaseClient,
   filtros: { partido?: string; serie?: string; numero?: number },
-): Promise<BonoRow[]> {
-  let query = admin.from("bonos").select("*");
+  pagination?: { page: number; pageSize: number },
+): Promise<PaginatedBonos> {
+  let query = admin.from("bonos").select("*", { count: "exact" });
   if (filtros.partido) query = query.eq("partido", filtros.partido);
   if (filtros.serie) query = query.eq("serie", filtros.serie);
   if (typeof filtros.numero === "number") query = query.eq("numero", filtros.numero);
-  const { data } = await query
+  query = query
     .order("partido", { ascending: true })
     .order("serie", { ascending: true })
     .order("numero", { ascending: true });
-  return (data ?? []) as BonoRow[];
+  if (pagination) {
+    const from = (pagination.page - 1) * pagination.pageSize;
+    query = query.range(from, from + pagination.pageSize - 1);
+  }
+  const { data, count } = await query;
+  return { bonos: (data ?? []) as BonoRow[], total: count ?? 0 };
 }
 
 export async function getBonoByTokenId(
