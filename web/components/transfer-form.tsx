@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import type { TipoTenedor } from "@/lib/eligibility";
 
 // Formato de cédula física costarricense (provincia 1-9 + 4 + 4) para validación en cliente.
 const CEDULA_CR = "[1-9]-?[0-9]{4}-?[0-9]{4}";
+const CEDULA_JURIDICA_CR = "[0-9]-?[0-9]{3}-?[0-9]{6}";
 
 type TransferPayload = {
   tokenId: number;
@@ -22,13 +23,77 @@ type TransferPayload = {
     nombre: string;
     cedula: string;
     entidad?: string;
-    representante?: string;
   };
 };
 
-export function TransferForm({ tokenId }: { tokenId: number }) {
+export function TransferForm({
+  tokenId,
+  mode = "endoso",
+  returnTo = "/tenedor",
+}: {
+  tokenId: number;
+  mode?: "colocacion" | "endoso";
+  returnTo?: string;
+}) {
   const router = useRouter();
   const [tipo, setTipo] = useState<TipoTenedor>("persona");
+  const [cedulaPersona, setCedulaPersona] = useState("");
+  const [nombrePersona, setNombrePersona] = useState("");
+  const [holderExistente, setHolderExistente] = useState<{
+    nombre: string;
+    cedula: string;
+  } | null>(null);
+  const [buscandoHolder, setBuscandoHolder] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const esColocacion = mode === "colocacion";
+
+  function cambiarCedulaPersona(value: string) {
+    setCedulaPersona(value);
+    if (holderExistente) {
+      setHolderExistente(null);
+      setNombrePersona("");
+    }
+  }
+
+  useEffect(() => {
+    if (tipo !== "persona") {
+      setHolderExistente(null);
+      setLookupError(null);
+      return;
+    }
+
+    const cedula = cedulaPersona.replace(/[\s-]/g, "");
+    if (!/^[1-9]\d{8}$/.test(cedula)) {
+      setHolderExistente(null);
+      setLookupError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setBuscandoHolder(true);
+    setLookupError(null);
+
+    fetch(`/api/holders/persona?cedula=${encodeURIComponent(cedula)}`, {
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "No se pudo consultar la cédula.");
+        setHolderExistente(data.holder ?? null);
+        if (data.holder?.nombre) setNombrePersona(data.holder.nombre);
+      })
+      .catch((error) => {
+        if ((error as Error).name !== "AbortError") {
+          setHolderExistente(null);
+          setLookupError((error as Error).message);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setBuscandoHolder(false);
+      });
+
+    return () => controller.abort();
+  }, [cedulaPersona, tipo]);
 
   const transferir = useMutation({
     mutationFn: async (payload: TransferPayload) => {
@@ -42,10 +107,13 @@ export function TransferForm({ tokenId }: { tokenId: number }) {
       return data;
     },
     onSuccess: () => {
-      toast.success("Endoso registrado en la cadena", {
-        description: "El bono quedó a nombre del nuevo tenedor.",
-      });
-      router.push("/tenedor");
+      toast.success(
+        esColocacion ? "Colocación registrada en la cadena" : "Endoso registrado en la cadena",
+        {
+          description: "El bono quedó a nombre del nuevo tenedor.",
+        },
+      );
+      router.push(returnTo);
       router.refresh();
     },
   });
@@ -53,15 +121,15 @@ export function TransferForm({ tokenId }: { tokenId: number }) {
   function confirmar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    const entidad = String(fd.get("entidad") ?? "");
     transferir.mutate({
       tokenId,
       precio: Number(fd.get("precio")),
       nuevoTenedor: {
         tipo,
-        nombre: String(fd.get("nombre") ?? fd.get("representante") ?? ""),
+        nombre: tipo === "persona" ? String(fd.get("nombre") ?? "") : entidad,
         cedula: String(fd.get("cedula") ?? ""),
-        entidad: tipo === "persona" ? undefined : String(fd.get("entidad") ?? ""),
-        representante: tipo === "persona" ? undefined : String(fd.get("representante") ?? ""),
+        entidad: tipo === "persona" ? undefined : entidad,
       },
     });
   }
@@ -94,27 +162,50 @@ export function TransferForm({ tokenId }: { tokenId: number }) {
 
       {tipo === "persona" ? (
         <>
-          <Field id="nombre" label="Nombre completo" />
           <Field
+            key="persona-cedula"
             id="cedula"
             label="Número de cédula"
             placeholder="1-1234-5678"
             pattern={CEDULA_CR}
+            value={cedulaPersona}
+            onChange={(e) => cambiarCedulaPersona(e.currentTarget.value)}
             mono
             error="Cédula costarricense inválida. Las personas extranjeras no pueden ser tenedoras (R2)."
           />
+          <Field
+            key="persona-nombre"
+            id="nombre"
+            label="Nombre completo"
+            value={nombrePersona}
+            onChange={(e) => setNombrePersona(e.currentTarget.value)}
+            readOnly={Boolean(holderExistente)}
+            hint={
+              holderExistente
+                ? "Nombre ya registrado para esta cédula."
+                : buscandoHolder
+                  ? "Consultando si la cédula ya existe..."
+                  : "Si es la primera transferencia a esta cédula, ingresá el nombre completo."
+            }
+          />
+          {lookupError && <p className="text-xs text-destructive">{lookupError}</p>}
         </>
       ) : (
         <>
-          <Field id="entidad" label={tipo === "banco" ? "Nombre del banco" : "Nombre del medio"} />
-          <Field id="representante" label="Representante legal" />
           <Field
+            key={`${tipo}-cedula-juridica`}
             id="cedula"
-            label="Cédula del representante"
-            placeholder="1-1234-5678"
-            pattern={CEDULA_CR}
+            label="Cédula jurídica"
+            placeholder="3-101-123456"
+            pattern={CEDULA_JURIDICA_CR}
             mono
-            error="Cédula costarricense inválida (R2)."
+            error="La cédula jurídica debe tener 10 dígitos."
+          />
+          <Field
+            key={`${tipo}-entidad`}
+            id="entidad"
+            label={tipo === "banco" ? "Razón social del banco" : "Razón social del medio"}
+            hint="Este será el nombre visible del tenedor jurídico."
           />
         </>
       )}
@@ -133,8 +224,9 @@ export function TransferForm({ tokenId }: { tokenId: number }) {
       <div className="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground/80">
         <Info className="mt-0.5 size-4 shrink-0 text-accent-foreground" />
         <p>
-          El endoso queda registrado en la cadena pública e inmutable. El partido no necesita
-          aprobar — se entera consultando la trazabilidad.
+          {esColocacion
+            ? "La colocación queda registrada en la cadena pública e inmutable como primer traspaso del partido al tenedor."
+            : "El endoso queda registrado en la cadena pública e inmutable. El partido no necesita aprobar — se entera consultando la trazabilidad."}
         </p>
       </div>
 
@@ -154,7 +246,11 @@ export function TransferForm({ tokenId }: { tokenId: number }) {
           ) : (
             <CheckCircle2 className="size-4" />
           )}
-          {transferir.isPending ? "Registrando endoso…" : "Confirmar transferencia"}
+          {transferir.isPending
+            ? esColocacion
+              ? "Registrando colocación…"
+              : "Registrando endoso…"
+            : "Confirmar transferencia"}
         </Button>
       </div>
     </form>
@@ -171,6 +267,9 @@ function Field({
   hint,
   error,
   mono,
+  value,
+  onChange,
+  readOnly,
 }: {
   id: string;
   label: string;
@@ -181,7 +280,18 @@ function Field({
   hint?: string;
   error?: string;
   mono?: boolean;
+  value?: string;
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  readOnly?: boolean;
 }) {
+  const controlledProps =
+    value === undefined
+      ? {}
+      : {
+          value,
+          onChange,
+        };
+
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -194,7 +304,9 @@ function Field({
         pattern={pattern}
         min={min}
         required
+        readOnly={readOnly}
         className={mono ? "tnum" : undefined}
+        {...controlledProps}
       />
       {error && (
         <p data-error className="text-xs text-destructive">

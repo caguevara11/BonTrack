@@ -109,10 +109,9 @@ export async function POST(req: NextRequest) {
     // 3) Tenedores iniciales con sus wallets.
     const bct = await findOrCreateHolder(admin, {
       tipo: "banco",
-      nombre: "Ana Gómez",
-      cedula: "19876543",
+      nombre: "Banco BCT",
+      cedula: "3101123456",
       entidad: "Banco BCT",
-      representante: "Ana Gómez",
     });
     const carlos = await findOrCreateHolder(admin, {
       tipo: "persona",

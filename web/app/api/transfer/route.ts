@@ -11,18 +11,19 @@ export const dynamic = "force-dynamic";
 /**
  * Endoso de un bono a otro tenedor (FLUJO 3 / AC-3).
  *
- * - R18: solo el vendedor (tenedor actual logueado) registra la transferencia.
+ * - Colocación: el partido emisor puede transferir un bono EMITIDO desde su wallet.
+ * - R18: luego de colocado, solo el tenedor actual registra la transferencia.
  * - R17/R1–R5: el nuevo tenedor debe cumplir elegibilidad.
  * - R19: precio obligatorio (validado acá y en el contrato).
- * - El bono permanece COLOCADO; cambia el tenedor actual.
+ * - El bono queda o permanece COLOCADO; cambia el tenedor actual.
  * - R16: el partido NO aprueba — se entera por la trazabilidad pública.
  */
 export async function POST(req: NextRequest) {
   const actor = await getCurrentActor();
   if (!actor) return NextResponse.json({ error: "No autenticado." }, { status: 401 });
-  if (actor.role !== "tenedor" || !actor.ownerPubkey) {
+  if (!["tenedor", "partido"].includes(actor.role) || !actor.ownerPubkey) {
     return NextResponse.json(
-      { error: "Solo un tenedor puede registrar una transferencia (R18)." },
+      { error: "Solo el dueño actual del bono puede registrar una transferencia." },
       { status: 403 },
     );
   }
@@ -51,12 +52,19 @@ export async function POST(req: NextRequest) {
 
   const admin = createSupabaseAdmin();
 
-  // R18: el bono debe pertenecer al tenedor logueado.
+  // El bono debe pertenecer a la wallet del actor logueado.
   const bono = await getBonoByTokenId(admin, tokenId);
   if (!bono) return NextResponse.json({ error: "Bono inexistente." }, { status: 404 });
   if (bono.current_owner_pubkey !== actor.ownerPubkey) {
     return NextResponse.json(
-      { error: "No sos el tenedor actual de este bono (R18)." },
+      { error: "No sos el dueño actual de este bono." },
+      { status: 403 },
+    );
+  }
+  const esColocacion = actor.role === "partido";
+  if (esColocacion && (bono.partido_id !== actor.partidoId || bono.estado !== "EMITIDO")) {
+    return NextResponse.json(
+      { error: "El partido solo puede colocar bonos propios en estado EMITIDO." },
       { status: 403 },
     );
   }
@@ -96,7 +104,7 @@ export async function POST(req: NextRequest) {
     // Espejar el evento en Supabase (caché para trazabilidad rápida).
     await admin.from("eventos").insert({
       token_id: tokenId,
-      tipo: "ENDOSO",
+      tipo: esColocacion ? "COLOCACION" : "ENDOSO",
       from_pubkey: actor.ownerPubkey,
       to_pubkey: dest.publicKey,
       from_label: fromLabel,

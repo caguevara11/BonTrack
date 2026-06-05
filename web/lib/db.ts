@@ -37,32 +37,48 @@ export function formatHolderLabel(t: {
   nombre: string;
   cedula: string;
   entidad?: string | null;
-  representante?: string | null;
 }): string {
   if (t.tipo === "persona") return `${t.nombre} (${t.cedula})`;
-  // banco / medio
-  return `${t.entidad} — rep. ${t.representante ?? t.nombre} (${t.cedula})`;
+  return `${t.entidad ?? t.nombre} (${t.cedula})`;
 }
 
+type HolderIdentity = {
+  id: string;
+  tipo: string;
+  nombre: string;
+  cedula: string;
+  entidad: string | null;
+  wallet: { public_key: string } | null;
+};
+
 /**
- * Busca un tenedor por cédula (persona) o entidad (banco/medio); si no existe,
+ * Busca un tenedor por identificación; si no existe,
  * crea su wallet custodial y el registro. Devuelve la public key de su wallet.
  */
 export async function findOrCreateHolder(
   admin: SupabaseClient,
   t: NuevoTenedor,
 ): Promise<{ holderId: string; publicKey: string; label: string }> {
-  const label = formatHolderLabel(t);
-
-  let query = admin.from("holders").select("id, wallet:wallets(public_key)").eq("tipo", t.tipo);
-  query = t.tipo === "persona" ? query.eq("cedula", t.cedula) : query.eq("entidad", t.entidad!);
+  let query = admin
+    .from("holders")
+    .select("id, tipo, nombre, cedula, entidad, wallet:wallets(public_key)")
+    .eq("tipo", t.tipo)
+    .eq("cedula", t.cedula);
   const { data: existing } = await query.maybeSingle();
 
   if (existing) {
-    const pk = (existing.wallet as unknown as { public_key: string } | null)?.public_key;
-    if (pk) return { holderId: existing.id as string, publicKey: pk, label };
+    const holder = existing as unknown as HolderIdentity;
+    const pk = holder.wallet?.public_key;
+    if (pk) {
+      return {
+        holderId: holder.id,
+        publicKey: pk,
+        label: formatHolderLabel(holder),
+      };
+    }
   }
 
+  const label = formatHolderLabel(t);
   const wallet = await createCustodialWallet(admin, label);
   const { data, error } = await admin
     .from("holders")
@@ -71,13 +87,26 @@ export async function findOrCreateHolder(
       nombre: t.nombre,
       cedula: t.cedula,
       entidad: t.entidad ?? null,
-      representante: t.representante ?? null,
       wallet_id: wallet.id,
     })
     .select("id")
     .single();
   if (error) throw new Error(`No se pudo crear el tenedor: ${error.message}`);
   return { holderId: data.id, publicKey: wallet.publicKey, label };
+}
+
+export async function getPersonaHolderByCedula(
+  admin: SupabaseClient,
+  cedula: string,
+): Promise<{ id: string; nombre: string; cedula: string } | null> {
+  const limpia = cedula.replace(/[\s-]/g, "");
+  const { data } = await admin
+    .from("holders")
+    .select("id, nombre, cedula")
+    .eq("tipo", "persona")
+    .eq("cedula", limpia)
+    .maybeSingle();
+  return data as { id: string; nombre: string; cedula: string } | null;
 }
 
 export async function getBonoByIdentidad(

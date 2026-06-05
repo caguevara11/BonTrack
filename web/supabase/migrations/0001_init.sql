@@ -28,18 +28,18 @@ create table if not exists partidos (
 );
 
 -- ── Tenedores (holders) — cada uno con su wallet custodial ───────────────────
--- persona: nombre+cedula propios. banco/medio: entidad + representante legal (su cédula).
+-- persona: nombre + cédula física. banco/medio: razón social + cédula jurídica.
 create table if not exists holders (
   id            uuid primary key default gen_random_uuid(),
   tipo          text not null check (tipo in ('persona','banco','medio')),
   nombre        text not null,
   cedula        text not null,
   entidad       text,
-  representante text,
   wallet_id     uuid references wallets(id),
   created_at    timestamptz not null default now()
 );
 create index if not exists holders_cedula_idx on holders (cedula);
+create unique index if not exists holders_tipo_cedula_unique_idx on holders (tipo, cedula);
 
 -- ── Perfiles de auth (1:1 con auth.users) ────────────────────────────────────
 create table if not exists profiles (

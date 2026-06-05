@@ -12,9 +12,8 @@ export type TipoEleccion = "presidencial" | "municipal";
 export type NuevoTenedor = {
   tipo: TipoTenedor;
   nombre: string;
-  cedula: string; // persona: su cédula; banco/medio: cédula del representante
-  entidad?: string; // banco/medio: nombre de la entidad
-  representante?: string; // banco/medio: nombre del representante legal
+  cedula: string; // persona: cédula física; banco/medio: cédula jurídica
+  entidad?: string; // banco/medio: razón social / nombre legal de la entidad
 };
 
 export type ElegibilidadResultado =
@@ -25,6 +24,12 @@ export type ElegibilidadResultado =
 export function esCedulaCostarricense(cedula: string): boolean {
   const limpia = cedula.replace(/[\s-]/g, "");
   return /^[1-9]\d{8}$/.test(limpia);
+}
+
+/** Cédula jurídica costarricense: 10 dígitos, usualmente escrita como 3-101-123456. */
+export function esCedulaJuridicaCostarricense(cedula: string): boolean {
+  const limpia = cedula.replace(/[\s-]/g, "");
+  return /^\d{10}$/.test(limpia);
 }
 
 export function validarElegibilidad(
@@ -50,7 +55,7 @@ export function validarElegibilidad(
   }
 
   // R2: personas extranjeras no pueden ser tenedoras. Validamos formato CR.
-  if (!esCedulaCostarricense(t.cedula)) {
+  if (t.tipo === "persona" && !esCedulaCostarricense(t.cedula)) {
     return {
       ok: false,
       code: "R2",
@@ -59,13 +64,20 @@ export function validarElegibilidad(
     };
   }
 
-  // Banco / medio: requieren entidad + representante legal (roles.md).
+  // Banco / medio: el tenedor es la entidad jurídica, no el representante físico.
   if (t.tipo === "banco" || t.tipo === "medio") {
-    if (!t.entidad?.trim() || !t.representante?.trim()) {
+    if (!t.entidad?.trim()) {
       return {
         ok: false,
         code: "DATOS",
-        reason: "Bancos y medios requieren entidad y representante legal.",
+        reason: "Bancos y medios requieren razón social.",
+      };
+    }
+    if (!esCedulaJuridicaCostarricense(t.cedula)) {
+      return {
+        ok: false,
+        code: "DATOS",
+        reason: "La cédula jurídica debe tener 10 dígitos.",
       };
     }
   }

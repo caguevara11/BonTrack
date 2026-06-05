@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, History } from "lucide-react";
 import { getCurrentActor } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { getBonosByPartidoId, getEventosByTokenIds, type EventoRow, type BonoRow } from "@/lib/db";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EstadoBadge } from "@/components/estado-badge";
 import { SiteHeader } from "@/components/site-chrome";
@@ -99,7 +100,14 @@ export default async function PartidoPage() {
           <Card>
             <CardContent className="divide-y divide-border p-0">
               {conEventos.map(({ bono, eventos }) => (
-                <BonoRowItem key={bono.token_id} bono={bono} tenedor={eventos[0]?.to_label} />
+                <BonoRowItem
+                  key={bono.token_id}
+                  bono={bono}
+                  tenedor={eventos[0]?.to_label}
+                  puedeColocar={
+                    bono.estado === "EMITIDO" && bono.current_owner_pubkey === actor.ownerPubkey
+                  }
+                />
               ))}
             </CardContent>
           </Card>
@@ -131,9 +139,17 @@ function Stat({
   );
 }
 
-function BonoRowItem({ bono, tenedor }: { bono: BonoRow; tenedor?: string }) {
+function BonoRowItem({
+  bono,
+  tenedor,
+  puedeColocar,
+}: {
+  bono: BonoRow;
+  tenedor?: string;
+  puedeColocar: boolean;
+}) {
   return (
-    <div className="flex items-center justify-between gap-3 px-5 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
       <div className="text-sm">
         <span className="font-medium text-foreground">
           Serie {bono.serie} · #{bono.numero}
@@ -142,12 +158,20 @@ function BonoRowItem({ bono, tenedor }: { bono: BonoRow; tenedor?: string }) {
       </div>
       <div className="flex items-center gap-3">
         <EstadoBadge estado={bono.estado} />
-        <Link
-          href={`/bono/${bono.token_id}`}
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          Ver historial
-        </Link>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/bono/${bono.token_id}`}>
+            <History className="size-4" />
+            Historial
+          </Link>
+        </Button>
+        {puedeColocar && (
+          <Button asChild size="sm">
+            <Link href={`/partido/transferir/${bono.token_id}`}>
+              <ArrowRightLeft className="size-4" />
+              Colocar
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
   );
