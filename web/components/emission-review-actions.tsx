@@ -47,7 +47,7 @@ export function EmissionReviewActions({ requestId }: { requestId: string }) {
           ) : (
             <CheckCircle2 className="size-4" />
           )}
-          Aprobar y mintear
+          Aprobar y crear
         </Button>
         <Button
           type="button"
