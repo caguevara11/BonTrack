@@ -19,8 +19,9 @@ import { Reveal } from "@/components/reveal";
 import { ResultadoBono } from "@/components/bono-result";
 import type { Resultado } from "@/app/api/trazabilidad/route";
 
-type Modo = "bono" | "cedula" | "partido";
+type Modo = "bono" | "cedula";
 type Catalogo = { partidos: string[]; series: string[] };
+const ALL_VALUE = "__all__";
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -43,20 +44,15 @@ export function TrazabilidadSearch() {
   });
   const partidos = catalogo?.partidos ?? [];
   const series = catalogo?.series ?? [];
-  // Defaults derivados (sin efecto): primer valor del catálogo si no se eligió.
-  const partidoSel = partido || partidos[0] || "";
-  const serieSel = serie || series[0] || "";
 
   const busqueda = useMutation({
     mutationFn: () => {
       const params = new URLSearchParams({ mode: modo });
       if (modo === "bono") {
-        params.set("partido", partidoSel);
-        params.set("serie", serieSel);
-        params.set("numero", numero);
-        params.set("verify", "chain");
-      } else if (modo === "partido") {
-        params.set("partido", partidoSel);
+        if (partido) params.set("partido", partido);
+        if (serie) params.set("serie", serie);
+        if (numero) params.set("numero", numero);
+        if (partido && serie && numero) params.set("verify", "chain");
       } else {
         params.set("cedula", cedula);
       }
@@ -83,9 +79,8 @@ export function TrazabilidadSearch() {
             >
               {(
                 [
-                  ["bono", "Bono específico"],
+                  ["bono", "Bono / partido"],
                   ["cedula", "Cédula de tenedor"],
-                  ["partido", "Partido"],
                 ] as const
               ).map(([value, label]) => (
                 <div key={value} className="flex items-center gap-2">
@@ -100,8 +95,8 @@ export function TrazabilidadSearch() {
             <div className="flex flex-wrap items-end gap-3">
               {modo === "bono" && (
                 <>
-                  <FieldSelect label="Partido" value={partidoSel} onChange={setPartido} options={partidos} />
-                  <FieldSelect label="Serie" value={serieSel} onChange={setSerie} options={series} />
+                  <FieldSelect label="Partido" value={partido} onChange={setPartido} options={partidos} allowAll />
+                  <FieldSelect label="Serie" value={serie} onChange={setSerie} options={series} allowAll />
                   <div className="grid gap-1.5">
                     <Label htmlFor="numero">Número</Label>
                     <Input
@@ -110,16 +105,11 @@ export function TrazabilidadSearch() {
                       min="1"
                       value={numero}
                       onChange={(e) => setNumero(e.target.value)}
-                      placeholder="4"
+                      placeholder="Todos"
                       className="w-28 tnum"
-                      required
                     />
                   </div>
                 </>
-              )}
-
-              {modo === "partido" && (
-                <FieldSelect label="Partido" value={partidoSel} onChange={setPartido} options={partidos} />
               )}
 
               {modo === "cedula" && (
@@ -175,20 +165,23 @@ function FieldSelect({
   value,
   onChange,
   options,
+  allowAll = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
+  allowAll?: boolean;
 }) {
   return (
     <div className="grid gap-1.5">
       <Label>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value || ALL_VALUE} onValueChange={(v) => onChange(v === ALL_VALUE ? "" : v)}>
         <SelectTrigger className="min-w-[7rem]">
           <SelectValue placeholder={`Elegir ${label.toLowerCase()}`} />
         </SelectTrigger>
         <SelectContent>
+          {allowAll && <SelectItem value={ALL_VALUE}>Todos</SelectItem>}
           {options.map((o) => (
             <SelectItem key={o} value={o}>
               {o}

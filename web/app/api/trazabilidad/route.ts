@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import {
-  getBonoByIdentidad,
   getBonosByCedula,
+  getBonosByFiltros,
   getBonosByPartidoNombre,
   getEventosByTokenIds,
   type BonoRow,
@@ -24,6 +24,7 @@ export type Resultado = {
  * (caché reconstruible de lo on-chain) para que la respuesta sea instantánea.
  *
  *   GET /api/trazabilidad?mode=bono&partido=PLN&serie=A&numero=4
+ *   GET /api/trazabilidad?mode=bono&partido=PLN&serie=A
  *   GET /api/trazabilidad?mode=cedula&cedula=1-1234-5678
  *   GET /api/trazabilidad?mode=bono&partido=PLN&serie=A&numero=4&verify=chain
  */
@@ -47,15 +48,19 @@ export async function GET(req: NextRequest) {
     } else {
       const partido = sp.get("partido")?.trim();
       const serie = sp.get("serie")?.trim();
-      const numero = Number(sp.get("numero"));
-      if (!partido || !serie || !Number.isFinite(numero)) {
-        return NextResponse.json(
-          { error: "Indique partido, serie y número." },
-          { status: 400 },
-        );
+      const numeroParam = sp.get("numero")?.trim();
+      const numero = numeroParam ? Number(numeroParam) : null;
+      if (!partido && !serie && numero === null) {
+        return NextResponse.json({ error: "Indique al menos un filtro." }, { status: 400 });
       }
-      const bono = await getBonoByIdentidad(admin, partido, serie, numero);
-      bonos = bono ? [bono] : [];
+      if (numero !== null && (!Number.isInteger(numero) || numero < 1)) {
+        return NextResponse.json({ error: "El número de bono no es válido." }, { status: 400 });
+      }
+      bonos = await getBonosByFiltros(admin, {
+        partido,
+        serie,
+        numero: numero ?? undefined,
+      });
     }
 
     const eventosPorBono = await getEventosByTokenIds(

@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { ShieldCheck, LogIn } from "lucide-react";
+import { ExternalLink, ShieldCheck, LogIn } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { TrazabilidadSearch } from "@/components/trazabilidad";
 import { Reveal } from "@/components/reveal";
+
+const STELLAR_CONTRACT_URL =
+  "https://stellar.expert/explorer/testnet/contract/CBCMZ5LYDCZHA7VFC5UT5EOYVCUN3ZUK3YWYJV6RW4RJYCEB763NOSKR";
 
 // PUB-1 — Buscador de Trazabilidad Pública (sin login).
 export default function PublicoPage() {
@@ -31,9 +34,19 @@ export default function PublicoPage() {
             Registro público de bonos de deuda política
           </h1>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-            Consultá la cadena de custodia completa de cualquier bono: quién lo emitió, quién lo
-            tuvo y a qué precio se endosó. Verificable de forma inmutable en la cadena.
+            Consultá la cadena de custodia completa de cualquier bono: quién lo
+            emitió, quién lo tuvo y a qué precio se endosó. Verificable de forma
+            inmutable en la cadena.
           </p>
+          <a
+            href={STELLAR_CONTRACT_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-secondary"
+          >
+            Ver contrato en Blockchain
+            <ExternalLink className="size-3.5" />
+          </a>
         </Reveal>
 
         <Reveal index={1}>

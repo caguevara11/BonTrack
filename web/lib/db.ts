@@ -125,6 +125,21 @@ export async function getBonoByIdentidad(
   return data as BonoRow | null;
 }
 
+export async function getBonosByFiltros(
+  admin: SupabaseClient,
+  filtros: { partido?: string; serie?: string; numero?: number },
+): Promise<BonoRow[]> {
+  let query = admin.from("bonos").select("*");
+  if (filtros.partido) query = query.eq("partido", filtros.partido);
+  if (filtros.serie) query = query.eq("serie", filtros.serie);
+  if (typeof filtros.numero === "number") query = query.eq("numero", filtros.numero);
+  const { data } = await query
+    .order("partido", { ascending: true })
+    .order("serie", { ascending: true })
+    .order("numero", { ascending: true });
+  return (data ?? []) as BonoRow[];
+}
+
 export async function getBonoByTokenId(
   admin: SupabaseClient,
   tokenId: number,
