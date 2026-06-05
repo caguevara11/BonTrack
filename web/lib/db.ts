@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createCustodialWallet } from "./wallets";
 import type { NuevoTenedor } from "./eligibility";
+import { getContractId, mintBono } from "./stellar";
 
 export type BonoRow = {
   token_id: number;
@@ -34,6 +35,27 @@ export type EventoRow = {
 export type PaginatedBonos = {
   bonos: BonoRow[];
   total: number;
+};
+
+export type EmissionRequestRow = {
+  id: string;
+  partido_id: string;
+  serie: string;
+  cantidad: number;
+  valor_nominal: number;
+  estado: "PENDIENTE" | "APROBADA" | "RECHAZADA";
+  motivo_rechazo: string | null;
+  requested_by: string | null;
+  reviewed_by: string | null;
+  requested_at: string;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  partido?: {
+    nombre: string;
+    slug: string;
+    tipo_eleccion: string;
+  } | null;
 };
 
 /** Etiqueta legible de un tenedor para mostrar en la trazabilidad. */
@@ -274,4 +296,193 @@ export async function getCatalogo(
   const partidos = [...new Set((data ?? []).map((b) => b.partido as string))].sort();
   const series = [...new Set((data ?? []).map((b) => b.serie as string))].sort();
   return { partidos, series };
+}
+
+export async function getEmissionRequestsForPartido(
+  admin: SupabaseClient,
+  partidoId: string,
+): Promise<EmissionRequestRow[]> {
+  const { data } = await admin
+    .from("emission_requests")
+    .select("*, partido:partidos(nombre, slug, tipo_eleccion)")
+    .eq("partido_id", partidoId)
+    .order("requested_at", { ascending: false });
+  return (data ?? []) as EmissionRequestRow[];
+}
+
+export async function getPendingEmissionRequests(
+  admin: SupabaseClient,
+): Promise<EmissionRequestRow[]> {
+  const { data } = await admin
+    .from("emission_requests")
+    .select("*, partido:partidos(nombre, slug, tipo_eleccion)")
+    .eq("estado", "PENDIENTE")
+    .order("requested_at", { ascending: true });
+  return (data ?? []) as EmissionRequestRow[];
+}
+
+export async function createEmissionRequest(
+  admin: SupabaseClient,
+  input: {
+    partidoId: string;
+    serie: string;
+    cantidad: number;
+    valorNominal: number;
+    requestedBy: string;
+  },
+): Promise<EmissionRequestRow> {
+  const serie = input.serie.trim().toUpperCase();
+  if (!/^[A-Z]$/.test(serie)) throw new Error("La serie debe ser una letra de A a Z.");
+  if (!Number.isInteger(input.cantidad) || input.cantidad <= 0) {
+    throw new Error("La cantidad debe ser un entero mayor a 0.");
+  }
+  if (!Number.isFinite(input.valorNominal) || input.valorNominal <= 0) {
+    throw new Error("El valor nominal debe ser mayor a 0.");
+  }
+
+  const { data, error } = await admin
+    .from("emission_requests")
+    .insert({
+      partido_id: input.partidoId,
+      serie,
+      cantidad: input.cantidad,
+      valor_nominal: input.valorNominal,
+      requested_by: input.requestedBy,
+    })
+    .select("*, partido:partidos(nombre, slug, tipo_eleccion)")
+    .single();
+  if (error) throw new Error(`No se pudo crear la solicitud: ${error.message}`);
+  return data as EmissionRequestRow;
+}
+
+export async function rejectEmissionRequest(
+  admin: SupabaseClient,
+  input: { requestId: string; reviewedBy: string; motivo: string },
+): Promise<void> {
+  const motivo = input.motivo.trim();
+  if (!motivo) throw new Error("El motivo de rechazo es obligatorio.");
+
+  const { error } = await admin
+    .from("emission_requests")
+    .update({
+      estado: "RECHAZADA",
+      motivo_rechazo: motivo,
+      reviewed_by: input.reviewedBy,
+      reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.requestId)
+    .eq("estado", "PENDIENTE");
+  if (error) throw new Error(`No se pudo rechazar la solicitud: ${error.message}`);
+}
+
+async function ensurePartidoWallet(
+  admin: SupabaseClient,
+  partidoId: string,
+): Promise<{ nombre: string; publicKey: string }> {
+  const { data: partido, error } = await admin
+    .from("partidos")
+    .select("id, nombre, wallet_id, wallet:wallets(public_key)")
+    .eq("id", partidoId)
+    .single();
+  if (error || !partido) throw new Error("Partido no encontrado.");
+
+  const existingPublicKey =
+    (partido.wallet as unknown as { public_key: string } | null)?.public_key ?? null;
+  if (existingPublicKey) {
+    return { nombre: partido.nombre as string, publicKey: existingPublicKey };
+  }
+
+  const wallet = await createCustodialWallet(admin, partido.nombre as string);
+  const { error: updateError } = await admin
+    .from("partidos")
+    .update({ wallet_id: wallet.id })
+    .eq("id", partidoId);
+  if (updateError) throw new Error(`No se pudo asociar wallet al partido: ${updateError.message}`);
+
+  return { nombre: partido.nombre as string, publicKey: wallet.publicKey };
+}
+
+export async function approveEmissionRequest(
+  admin: SupabaseClient,
+  input: { requestId: string; reviewedBy: string },
+): Promise<{ minted: number }> {
+  const { data: request, error } = await admin
+    .from("emission_requests")
+    .select("*, partido:partidos(nombre, slug, tipo_eleccion)")
+    .eq("id", input.requestId)
+    .single();
+  if (error || !request) throw new Error("Solicitud no encontrada.");
+
+  const solicitud = request as EmissionRequestRow;
+  if (solicitud.estado !== "PENDIENTE") {
+    throw new Error("Esta solicitud ya fue revisada.");
+  }
+
+  const partido = await ensurePartidoWallet(admin, solicitud.partido_id);
+  const contractId = getContractId();
+  const { data: lastBono } = await admin
+    .from("bonos")
+    .select("numero")
+    .eq("partido_id", solicitud.partido_id)
+    .eq("serie", solicitud.serie)
+    .order("numero", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const startNumero = Number(lastBono?.numero ?? 0) + 1;
+  const fechaEmision = new Date().toISOString().slice(0, 10);
+
+  for (let offset = 0; offset < solicitud.cantidad; offset++) {
+    const numero = startNumero + offset;
+    const { tokenId, hash } = await mintBono(partido.publicKey, {
+      partido: partido.nombre,
+      serie: solicitud.serie,
+      numero,
+      valorNominal: BigInt(solicitud.valor_nominal),
+      fechaEmision,
+    });
+
+    const { error: bonoError } = await admin.from("bonos").insert({
+      token_id: tokenId,
+      partido: partido.nombre,
+      serie: solicitud.serie,
+      numero,
+      valor_nominal: solicitud.valor_nominal,
+      fecha_emision: fechaEmision,
+      partido_id: solicitud.partido_id,
+      current_owner_pubkey: partido.publicKey,
+      estado: "EMITIDO",
+      contract_id: contractId,
+    });
+    if (bonoError) throw new Error(`No se pudo cachear el bono ${numero}: ${bonoError.message}`);
+
+    const { error: eventoError } = await admin.from("eventos").insert({
+      token_id: tokenId,
+      tipo: "EMISION",
+      from_pubkey: null,
+      to_pubkey: partido.publicKey,
+      from_label: null,
+      to_label: partido.nombre,
+      precio: null,
+      ts: new Date().toISOString(),
+      tx_hash: hash,
+      registrado_por: "TSE",
+    });
+    if (eventoError) {
+      throw new Error(`No se pudo cachear el evento de emisión: ${eventoError.message}`);
+    }
+  }
+
+  const { error: updateError } = await admin
+    .from("emission_requests")
+    .update({
+      estado: "APROBADA",
+      reviewed_by: input.reviewedBy,
+      reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.requestId);
+  if (updateError) throw new Error(`No se pudo aprobar la solicitud: ${updateError.message}`);
+
+  return { minted: solicitud.cantidad };
 }

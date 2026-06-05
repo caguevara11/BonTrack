@@ -1,15 +1,24 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRightLeft, History } from "lucide-react";
+import { ArrowRightLeft, FilePlus2, History } from "lucide-react";
 import { getCurrentActor } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import { getBonosByPartidoId, getEventosByTokenIds, type EventoRow, type BonoRow } from "@/lib/db";
+import {
+  getBonosByPartidoId,
+  getEmissionRequestsForPartido,
+  getEventosByTokenIds,
+  type BonoRow,
+  type EmissionRequestRow,
+  type EventoRow,
+} from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { EstadoBadge } from "@/components/estado-badge";
 import { SiteHeader } from "@/components/site-chrome";
 import { LogoutButton } from "@/components/logout-button";
 import { Reveal } from "@/components/reveal";
+import { EmissionRequestForm } from "@/components/emission-request-form";
 import { colones, fmtFecha } from "@/lib/utils";
 
 export const metadata = { title: "Panel del partido · BonTrack" };
@@ -22,7 +31,10 @@ export default async function PartidoPage() {
   if (actor.role !== "partido" || !actor.partidoId) redirect("/inicio");
 
   const admin = createSupabaseAdmin();
-  const bonos = await getBonosByPartidoId(admin, actor.partidoId);
+  const [bonos, solicitudes] = await Promise.all([
+    getBonosByPartidoId(admin, actor.partidoId),
+    getEmissionRequestsForPartido(admin, actor.partidoId),
+  ]);
   const eventosPorBono = await getEventosByTokenIds(
     admin,
     bonos.map((b) => b.token_id),
@@ -34,6 +46,7 @@ export default async function PartidoPage() {
 
   const emitidos = bonos.filter((b) => b.estado === "EMITIDO").length;
   const colocados = bonos.filter((b) => b.estado === "COLOCADO").length;
+  const pendientes = solicitudes.filter((s) => s.estado === "PENDIENTE").length;
 
   const actividad = conEventos
     .flatMap(({ bono, eventos }) =>
@@ -50,10 +63,50 @@ export default async function PartidoPage() {
         <Reveal className="grid grid-cols-3 gap-4">
           <Stat label="Emitidos" value={emitidos} hint="disponibles" accent />
           <Stat label="Colocados" value={colocados} hint="en tenedores" />
-          <Stat label="Aprob. pendiente" value={0} hint="solicitudes" />
+          <Stat label="Aprob. pendiente" value={pendientes} hint="solicitudes" />
         </Reveal>
 
         <Reveal index={1}>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Nueva emisión
+          </h2>
+          <Card>
+            <CardContent className="space-y-4 pt-6">
+              <div>
+                <h3 className="flex items-center gap-2 font-heading text-xl font-semibold text-foreground">
+                  <FilePlus2 className="size-5 text-accent-foreground" />
+                  Solicitar bonos al TSE
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  El TSE revisa la solicitud; si aprueba, los bonos quedan EMITIDO y listos para
+                  colocar.
+                </p>
+              </div>
+              <EmissionRequestForm />
+            </CardContent>
+          </Card>
+        </Reveal>
+
+        <Reveal index={2}>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Solicitudes
+          </h2>
+          <Card>
+            <CardContent className="divide-y divide-border p-0">
+              {solicitudes.length === 0 ? (
+                <p className="px-5 py-6 text-center text-sm text-muted-foreground">
+                  No hay solicitudes de emisión todavía.
+                </p>
+              ) : (
+                solicitudes.map((solicitud) => (
+                  <SolicitudRow key={solicitud.id} solicitud={solicitud} />
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </Reveal>
+
+        <Reveal index={3}>
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Actividad reciente
           </h2>
@@ -93,7 +146,7 @@ export default async function PartidoPage() {
           </Card>
         </Reveal>
 
-        <Reveal index={2}>
+        <Reveal index={4}>
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Mis bonos
           </h2>
@@ -115,6 +168,38 @@ export default async function PartidoPage() {
       </main>
     </div>
   );
+}
+
+function SolicitudRow({ solicitud }: { solicitud: EmissionRequestRow }) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3 px-5 py-4">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-foreground">
+            Serie {solicitud.serie} · {solicitud.cantidad} bonos
+          </span>
+          <RequestBadge estado={solicitud.estado} />
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {colones(solicitud.valor_nominal)} nominal · solicitada {fmtFecha(solicitud.requested_at)}
+        </p>
+        {solicitud.motivo_rechazo && (
+          <p className="mt-1 text-sm text-destructive">Motivo: {solicitud.motivo_rechazo}</p>
+        )}
+      </div>
+      {solicitud.reviewed_at && (
+        <span className="font-mono text-xs text-muted-foreground tnum">
+          Revisada {fmtFecha(solicitud.reviewed_at)}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function RequestBadge({ estado }: { estado: EmissionRequestRow["estado"] }) {
+  const variant =
+    estado === "RECHAZADA" ? "destructive" : estado === "APROBADA" ? "secondary" : "outline";
+  return <Badge variant={variant}>{estado}</Badge>;
 }
 
 function Stat({
