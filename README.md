@@ -23,7 +23,7 @@ y timestamp, y cualquier persona puede consultar la cadena de custodia.
 
 ## Alcance Del MVP
 
-El MVP es una demostracion funcional, no un sistema productivo regulatorio. En el
+El MVP es una demostracion funcional. En el
 contexto legal actual puede operar como gemelo digital paralelo al documento
 fisico; produccion plena requeriria reforma del Codigo Electoral y del
 Reglamento sobre Financiamiento de Partidos Politicos.
