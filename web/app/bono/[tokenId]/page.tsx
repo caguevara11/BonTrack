@@ -1,8 +1,6 @@
 import { cache } from "react";
-import Link from "next/link";
 import type { Metadata } from "next";
 import {
-  ArrowLeft,
   CalendarDays,
   CircleDollarSign,
   ExternalLink,
@@ -12,6 +10,7 @@ import {
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { getBonoByTokenId, getEventos } from "@/lib/db";
 import { CustodyTimeline } from "@/components/bono-result";
+import { BackLink } from "@/components/back-link";
 import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { EstadoBadge } from "@/components/estado-badge";
 import { Reveal } from "@/components/reveal";
@@ -52,23 +51,14 @@ export default async function BonoPage({ params }: { params: Promise<{ tokenId: 
 
   return (
     <div className="flex flex-1 flex-col">
-      <SiteHeader
-        subtitle="Historial de custodia"
-        width="5xl"
-        right={
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1 text-sm text-primary-foreground/90 hover:text-primary-foreground"
-          >
-            <ArrowLeft className="size-4" />
-            Inicio
-          </Link>
-        }
-      />
+      <SiteHeader subtitle="Historial de custodia" width="5xl" />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
         {bono ? (
           <Reveal>
+            <div className="mb-4">
+              <BackLink />
+            </div>
             <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
               <div>
                 <div className="font-mono text-xs font-medium uppercase tracking-widest text-accent-foreground/70">

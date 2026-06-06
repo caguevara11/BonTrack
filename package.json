@@ -1,4 +1,14 @@
 {
+  "name": "bontrack",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix web run start",
+    "lint": "npm --prefix web run lint",
+    "install:web": "npm --prefix web install",
+    "reconcile": "npm --prefix web run reconcile"
+  },
   "devDependencies": {
     "playwright": "^1.60.0"
   }

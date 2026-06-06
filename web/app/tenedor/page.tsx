@@ -11,7 +11,7 @@ import { SiteHeader } from "@/components/site-chrome";
 import { LogoutButton } from "@/components/logout-button";
 import { Reveal } from "@/components/reveal";
 import { Shell, KpiBand, Stat } from "@/components/dashboard";
-import { colones, fmtFecha, bonoLabel } from "@/lib/utils";
+import { colones, fmtFechaCorta, bonoLabel } from "@/lib/utils";
 
 export const metadata = { title: "Mis bonos · BonTrack" };
 
@@ -109,7 +109,7 @@ export default async function TenedorPage() {
                     <dl className="space-y-1 px-4 py-3 text-sm tnum">
                       <Row label="Valor nominal" value={colones(bono.valor_nominal)} />
                       {fechaAdquisicion && (
-                        <Row label="En mi poder desde" value={fmtFecha(fechaAdquisicion)} />
+                        <Row label="En mi poder desde" value={fmtFechaCorta(fechaAdquisicion)} />
                       )}
                       {precioPagado != null && (
                         <Row
@@ -156,8 +156,8 @@ export default async function TenedorPage() {
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium text-foreground">{value}</dd>
+      <dt className="whitespace-nowrap text-muted-foreground">{label}</dt>
+      <dd className="whitespace-nowrap text-right font-medium text-foreground">{value}</dd>
     </div>
   );
 }

@@ -78,7 +78,8 @@ export function TransferForm({
     })
       .then(async (res) => {
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "No se pudo consultar la cédula.");
+        if (!res.ok)
+          throw new Error(data.error ?? "No se pudo consultar la cédula.");
         setHolderExistente(data.holder ?? null);
         if (data.holder?.nombre) setNombrePersona(data.holder.nombre);
       })
@@ -103,12 +104,15 @@ export function TransferForm({
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo registrar la transferencia.");
+      if (!res.ok)
+        throw new Error(data.error ?? "No se pudo registrar la transferencia.");
       return data;
     },
     onSuccess: () => {
       toast.success(
-        esColocacion ? "Colocación registrada en la cadena" : "Endoso registrado en la cadena",
+        esColocacion
+          ? "Colocación registrada en la cadena"
+          : "Endoso registrado en la cadena",
         {
           description: "El bono quedó a nombre del nuevo tenedor.",
         },
@@ -152,7 +156,10 @@ export function TransferForm({
           {tipos.map((t) => (
             <div key={t.value} className="flex items-center gap-2">
               <RadioGroupItem value={t.value} id={`tipo-${t.value}`} />
-              <Label htmlFor={`tipo-${t.value}`} className="cursor-pointer font-normal">
+              <Label
+                htmlFor={`tipo-${t.value}`}
+                className="cursor-pointer font-normal"
+              >
                 {t.label}
               </Label>
             </div>
@@ -185,10 +192,12 @@ export function TransferForm({
                 ? "Nombre ya registrado para esta cédula."
                 : buscandoHolder
                   ? "Consultando si la cédula ya existe..."
-                  : "Si es la primera transferencia a esta cédula, ingresá el nombre completo."
+                  : "Nombre completo de la persona a transferir"
             }
           />
-          {lookupError && <p className="text-xs text-destructive">{lookupError}</p>}
+          {lookupError && (
+            <p className="text-xs text-destructive">{lookupError}</p>
+          )}
         </>
       ) : (
         <>
@@ -204,7 +213,11 @@ export function TransferForm({
           <Field
             key={`${tipo}-entidad`}
             id="entidad"
-            label={tipo === "banco" ? "Razón social del banco" : "Razón social del medio"}
+            label={
+              tipo === "banco"
+                ? "Razón social del banco"
+                : "Razón social del medio"
+            }
             hint="Este será el nombre visible del tenedor jurídico."
           />
         </>
@@ -215,7 +228,7 @@ export function TransferForm({
         label="Precio pactado (₡)"
         type="number"
         min="1"
-        placeholder="950000"
+        placeholder="0"
         mono
         hint="Obligatorio — queda registrado on-chain (R19)."
         error="Ingresá un monto mayor a 0 (R19)."
