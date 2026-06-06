@@ -224,6 +224,8 @@ export async function getBonosByOwner(
     .from("bonos")
     .select("*")
     .eq("current_owner_pubkey", ownerPubkey)
+    .order("partido", { ascending: true })
+    .order("serie", { ascending: true })
     .order("numero", { ascending: true });
   return (data ?? []) as BonoRow[];
 }
@@ -257,6 +259,8 @@ export async function getBonosByCedula(
     .from("bonos")
     .select("*")
     .in("current_owner_pubkey", pubkeys)
+    .order("partido", { ascending: true })
+    .order("serie", { ascending: true })
     .order("numero", { ascending: true });
   return (data ?? []) as BonoRow[];
 }
@@ -270,6 +274,7 @@ export async function getBonosByPartidoId(
     .from("bonos")
     .select("*")
     .eq("partido_id", partidoId)
+    .order("serie", { ascending: true })
     .order("numero", { ascending: true });
   return (data ?? []) as BonoRow[];
 }
@@ -321,6 +326,33 @@ export async function getPendingEmissionRequests(
   return (data ?? []) as EmissionRequestRow[];
 }
 
+/**
+ * Siguiente serie consecutiva que un partido puede solicitar (A, B, C…).
+ * Considera solicitudes vivas (pendiente/aprobada) y bonos ya emitidos.
+ * Devuelve "A" si no tiene ninguna; un carácter > "Z" si ya agotó A–Z.
+ */
+export async function nextSerieForPartido(
+  admin: SupabaseClient,
+  partidoId: string,
+): Promise<string> {
+  const usadas = new Set<string>();
+  const [{ data: reqs }, { data: bonos }] = await Promise.all([
+    admin
+      .from("emission_requests")
+      .select("serie")
+      .eq("partido_id", partidoId)
+      .in("estado", ["PENDIENTE", "APROBADA"]),
+    admin.from("bonos").select("serie").eq("partido_id", partidoId),
+  ]);
+  for (const r of reqs ?? []) usadas.add(String(r.serie));
+  for (const b of bonos ?? []) usadas.add(String(b.serie));
+
+  const maxCode = usadas.size
+    ? Math.max(...[...usadas].map((s) => s.charCodeAt(0)))
+    : "A".charCodeAt(0) - 1;
+  return String.fromCharCode(maxCode + 1);
+}
+
 export async function createEmissionRequest(
   admin: SupabaseClient,
   input: {
@@ -338,6 +370,21 @@ export async function createEmissionRequest(
   }
   if (!Number.isFinite(input.valorNominal) || input.valorNominal <= 0) {
     throw new Error("El valor nominal debe ser mayor a 0.");
+  }
+
+  // Las series se emiten en orden consecutivo (A, B, C…) y son únicas por
+  // partido. Reunimos las series ya usadas —solicitudes vivas (pendiente o
+  // aprobada) y bonos emitidos— y exigimos que la pedida sea la siguiente.
+  const esperada = await nextSerieForPartido(admin, input.partidoId);
+  if (esperada > "Z") {
+    throw new Error("Ya se emitieron todas las series disponibles (A–Z).");
+  }
+  if (serie !== esperada) {
+    throw new Error(
+      serie < esperada
+        ? `La serie ${serie} ya existe o no corresponde. La siguiente serie disponible es la ${esperada}.`
+        : `Las series se emiten en orden: te toca la serie ${esperada}, no la ${serie}.`,
+    );
   }
 
   const { data, error } = await admin

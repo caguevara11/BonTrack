@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, Send } from "lucide-react";
@@ -15,10 +15,9 @@ type Payload = {
   valorNominal: number;
 };
 
-export function EmissionRequestForm() {
+export function EmissionRequestForm({ nextSerie }: { nextSerie: string }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const [serie, setSerie] = useState("A");
 
   const crear = useMutation({
     mutationFn: async (payload: Payload) => {
@@ -28,7 +27,8 @@ export function EmissionRequestForm() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo crear la solicitud.");
+      if (!res.ok)
+        throw new Error(data.error ?? "No se pudo crear la solicitud.");
       return data;
     },
     onSuccess: () => {
@@ -36,7 +36,6 @@ export function EmissionRequestForm() {
         description: "Quedó pendiente de aprobación.",
       });
       formRef.current?.reset();
-      setSerie("A");
       router.refresh();
     },
   });
@@ -45,7 +44,7 @@ export function EmissionRequestForm() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     crear.mutate({
-      serie,
+      serie: nextSerie,
       cantidad: Number(fd.get("cantidad")),
       valorNominal: Number(fd.get("valorNominal")),
     });
@@ -59,19 +58,26 @@ export function EmissionRequestForm() {
           <Input
             id="serie"
             name="serie"
-            value={serie}
-            onChange={(e) => setSerie(e.currentTarget.value.toUpperCase().slice(0, 1))}
-            pattern="[A-Z]"
-            required
-            className="tnum uppercase"
+            value={nextSerie}
+            readOnly
+            aria-describedby="serie-hint"
+            className="tnum cursor-not-allowed bg-secondary/40 uppercase"
+            title="La serie se asigna en orden automáticamente"
           />
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="cantidad">Cantidad</Label>
-          <Input id="cantidad" name="cantidad" type="number" min="1" required className="tnum" />
+          <Input
+            id="cantidad"
+            name="cantidad"
+            type="number"
+            min="1"
+            required
+            className="tnum"
+          />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="valorNominal">Valor nominal</Label>
+          <Label htmlFor="valorNominal">Valor nominal (colones)</Label>
           <Input
             id="valorNominal"
             name="valorNominal"
@@ -83,6 +89,10 @@ export function EmissionRequestForm() {
         </div>
       </div>
 
+      <p id="serie-hint" className="text-xs text-muted-foreground">
+        La serie se asigna en orden alfabético consecutivo.
+      </p>
+
       {crear.isError && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {(crear.error as Error).message}
@@ -90,7 +100,11 @@ export function EmissionRequestForm() {
       )}
 
       <Button type="submit" disabled={crear.isPending}>
-        {crear.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+        {crear.isPending ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Send className="size-4" />
+        )}
         Enviar solicitud
       </Button>
 

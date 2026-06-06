@@ -6,6 +6,7 @@ import {
   getBonosByPartidoId,
   getEmissionRequestsForPartido,
   getEventosByTokenIds,
+  nextSerieForPartido,
   type EmissionRequestRow,
   type EventoRow,
 } from "@/lib/db";
@@ -29,10 +30,12 @@ export default async function PartidoPage() {
   if (actor.role !== "partido" || !actor.partidoId) redirect("/inicio");
 
   const admin = createSupabaseAdmin();
-  const [bonos, solicitudes] = await Promise.all([
+  const [bonos, solicitudes, nextSerie] = await Promise.all([
     getBonosByPartidoId(admin, actor.partidoId),
     getEmissionRequestsForPartido(admin, actor.partidoId),
+    nextSerieForPartido(admin, actor.partidoId),
   ]);
+  const seriesAgotadas = nextSerie > "Z";
   const eventosPorBono = await getEventosByTokenIds(
     admin,
     bonos.map((b) => b.token_id),
@@ -109,7 +112,13 @@ export default async function PartidoPage() {
                   El TSE revisa la solicitud; si aprueba, los bonos quedan EMITIDO y listos para
                   colocar.
                 </p>
-                <EmissionRequestForm />
+                {seriesAgotadas ? (
+                  <p className="rounded-lg border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+                    Ya se emitieron todas las series disponibles (A–Z).
+                  </p>
+                ) : (
+                  <EmissionRequestForm nextSerie={nextSerie} />
+                )}
               </Panel>
             </Reveal>
 
