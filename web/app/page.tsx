@@ -87,7 +87,7 @@ export default function PublicoPage() {
                 className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-panel"
               >
                 <span
-                  className="pointer-events-none absolute -right-2 -top-3 font-heading text-6xl font-semibold text-secondary/70 tnum"
+                  className="pointer-events-none absolute -bottom-5 right-1 select-none font-heading text-[5.5rem] font-bold leading-none text-secondary tnum"
                   aria-hidden
                 >
                   {n}
