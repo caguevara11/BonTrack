@@ -1,28 +1,41 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRightLeft, History } from "lucide-react";
+import { ArrowRightLeft, Coins, FilePlus2, Landmark, ScrollText, Send } from "lucide-react";
 import { getCurrentActor } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import { getBonosByPartidoId, getEventosByTokenIds, type EventoRow, type BonoRow } from "@/lib/db";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { EstadoBadge } from "@/components/estado-badge";
+import {
+  getBonosByPartidoId,
+  getEmissionRequestsForPartido,
+  getEventosByTokenIds,
+  nextSerieForPartido,
+  type EmissionRequestRow,
+  type EventoRow,
+} from "@/lib/db";
+import { Badge } from "@/components/ui/badge";
 import { SiteHeader } from "@/components/site-chrome";
 import { LogoutButton } from "@/components/logout-button";
 import { Reveal } from "@/components/reveal";
+import { EmissionRequestForm } from "@/components/emission-request-form";
+import { PartidoBonos } from "@/components/partido-bonos";
+import { Shell, KpiBand, Stat, Panel, EmptyState } from "@/components/dashboard";
 import { colones, fmtFecha } from "@/lib/utils";
 
 export const metadata = { title: "Panel del partido · BonTrack" };
 
-// Vista del partido — sprint-01: trazabilidad de SUS bonos leída de la cadena
-// pública. Así "se entera" de los endosos sin sistema de notificaciones (R16/AC-3.4).
+// Vista del partido — tablero operativo (sprint-03): KPIs + columna principal
+// (Mis bonos) + riel (solicitar / solicitudes / actividad). La trazabilidad de
+// SUS bonos se lee de la cadena pública (R16/AC-3.4).
 export default async function PartidoPage() {
   const actor = await getCurrentActor();
   if (!actor) redirect("/login");
   if (actor.role !== "partido" || !actor.partidoId) redirect("/inicio");
 
   const admin = createSupabaseAdmin();
-  const bonos = await getBonosByPartidoId(admin, actor.partidoId);
+  const [bonos, solicitudes, nextSerie] = await Promise.all([
+    getBonosByPartidoId(admin, actor.partidoId),
+    getEmissionRequestsForPartido(admin, actor.partidoId),
+    nextSerieForPartido(admin, actor.partidoId),
+  ]);
+  const seriesAgotadas = nextSerie > "Z";
   const eventosPorBono = await getEventosByTokenIds(
     admin,
     bonos.map((b) => b.token_id),
@@ -34,6 +47,21 @@ export default async function PartidoPage() {
 
   const emitidos = bonos.filter((b) => b.estado === "EMITIDO").length;
   const colocados = bonos.filter((b) => b.estado === "COLOCADO").length;
+  const pendientes = solicitudes.filter((s) => s.estado === "PENDIENTE").length;
+  const valorColocado = conEventos
+    .filter(({ bono }) => bono.estado === "COLOCADO")
+    .reduce((sum, { bono }) => sum + Number(bono.valor_nominal), 0);
+
+  const bonosUI = conEventos.map(({ bono, eventos }) => ({
+    tokenId: bono.token_id,
+    serie: bono.serie,
+    numero: bono.numero,
+    valorNominal: Number(bono.valor_nominal),
+    estado: bono.estado,
+    tenedor: eventos[0]?.to_label ?? null,
+    puedeColocar:
+      bono.estado === "EMITIDO" && bono.current_owner_pubkey === actor.ownerPubkey,
+  }));
 
   const actividad = conEventos
     .flatMap(({ bono, eventos }) =>
@@ -44,135 +72,132 @@ export default async function PartidoPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <SiteHeader subtitle={actor.displayName} right={<LogoutButton />} />
+      <SiteHeader subtitle={actor.displayName} right={<LogoutButton />} width="7xl" />
 
-      <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-6 py-8">
-        <Reveal className="grid grid-cols-3 gap-4">
-          <Stat label="Emitidos" value={emitidos} hint="disponibles" accent />
-          <Stat label="Colocados" value={colocados} hint="en tenedores" />
-          <Stat label="Aprob. pendiente" value={0} hint="solicitudes" />
+      <Shell>
+        <Reveal className="mb-6">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
+            Panel del partido
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Emisión, colocación y trazabilidad de los bonos de {actor.displayName}.
+          </p>
         </Reveal>
 
         <Reveal index={1}>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Actividad reciente
-          </h2>
-          <Card>
-            <CardContent className="divide-y divide-border p-0">
-              {actividad.length === 0 ? (
-                <p className="px-5 py-6 text-center text-sm text-muted-foreground">
-                  Sin movimientos todavía.
+          <KpiBand className="mb-6">
+            <Stat icon={Coins} label="Emitidos" value={emitidos} hint="disponibles para colocar" accent />
+            <Stat icon={Landmark} label="Colocados" value={colocados} hint="en tenedores" />
+            <Stat icon={Send} label="Aprob. pendiente" value={pendientes} hint="solicitudes en revisión" />
+            <Stat
+              icon={ScrollText}
+              label="Valor colocado"
+              value={colones(valorColocado)}
+              hint="nominal en circulación"
+            />
+          </KpiBand>
+        </Reveal>
+
+        <div className="grid gap-6 lg:grid-cols-[1.55fr_1fr]">
+          <Reveal index={2} className="min-w-0">
+            <Panel eyebrow="Cartera" title="Mis bonos" flush>
+              <PartidoBonos bonos={bonosUI} />
+            </Panel>
+          </Reveal>
+
+          <div className="space-y-6">
+            <Reveal index={2}>
+              <Panel eyebrow="Nueva emisión" title="Solicitar bonos al TSE" icon={FilePlus2}>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  El TSE revisa la solicitud; si aprueba, los bonos quedan EMITIDO y listos para
+                  colocar.
                 </p>
-              ) : (
-                actividad.map(({ bono, ev }) => (
-                  <div
-                    key={ev.id}
-                    className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
-                  >
-                    <span className="text-foreground/90">
-                      <span className="font-mono text-xs font-semibold uppercase text-accent-foreground/70">
-                        {bono.serie}-{bono.numero}
-                      </span>{" "}
-                      <span className="text-muted-foreground">
-                        {ev.tipo === "COLOCACION" ? "colocado:" : "endosado:"}
-                      </span>{" "}
-                      {ev.from_label}
-                      <ArrowRightLeft className="mx-1 inline size-3 text-accent" />
-                      <span className="font-medium">{ev.to_label}</span>
-                      {ev.precio != null && (
-                        <span className="ml-1 text-muted-foreground tnum">· {colones(ev.precio)}</span>
-                      )}
-                    </span>
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground tnum">
-                      {fmtFecha(ev.ts)}
-                    </span>
+                {seriesAgotadas ? (
+                  <p className="rounded-lg border border-border bg-secondary/40 px-4 py-3 text-sm text-muted-foreground">
+                    Ya se emitieron todas las series disponibles (A–Z).
+                  </p>
+                ) : (
+                  <EmissionRequestForm nextSerie={nextSerie} />
+                )}
+              </Panel>
+            </Reveal>
+
+            <Reveal index={3}>
+              <Panel eyebrow="Trámites" title="Solicitudes" flush>
+                {solicitudes.length === 0 ? (
+                  <EmptyState icon={Send}>No hay solicitudes de emisión todavía.</EmptyState>
+                ) : (
+                  <div className="panel-scroll max-h-80 divide-y divide-border">
+                    {solicitudes.map((solicitud) => (
+                      <SolicitudRow key={solicitud.id} solicitud={solicitud} />
+                    ))}
                   </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </Reveal>
+                )}
+              </Panel>
+            </Reveal>
 
-        <Reveal index={2}>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Mis bonos
-          </h2>
-          <Card>
-            <CardContent className="divide-y divide-border p-0">
-              {conEventos.map(({ bono, eventos }) => (
-                <BonoRowItem
-                  key={bono.token_id}
-                  bono={bono}
-                  tenedor={eventos[0]?.to_label}
-                  puedeColocar={
-                    bono.estado === "EMITIDO" && bono.current_owner_pubkey === actor.ownerPubkey
-                  }
-                />
-              ))}
-            </CardContent>
-          </Card>
-        </Reveal>
-      </main>
+            <Reveal index={4}>
+              <Panel eyebrow="Movimientos" title="Actividad reciente" flush>
+                {actividad.length === 0 ? (
+                  <EmptyState icon={ArrowRightLeft}>Sin movimientos todavía.</EmptyState>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {actividad.map(({ bono, ev }) => (
+                      <div
+                        key={ev.id}
+                        className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm"
+                      >
+                        <span className="min-w-0 text-foreground/90">
+                          <span className="font-mono text-xs font-semibold uppercase text-accent-foreground/70">
+                            {bono.serie}-{bono.numero}
+                          </span>{" "}
+                          <span className="text-muted-foreground">
+                            {ev.tipo === "COLOCACION" ? "colocado:" : "endosado:"}
+                          </span>{" "}
+                          <span className="font-medium">{ev.to_label}</span>
+                          {ev.precio != null && (
+                            <span className="ml-1 text-muted-foreground tnum">
+                              · {colones(ev.precio)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground tnum">
+                          {fmtFecha(ev.ts)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Panel>
+            </Reveal>
+          </div>
+        </div>
+      </Shell>
     </div>
   );
 }
 
-function Stat({
-  label,
-  value,
-  hint,
-  accent,
-}: {
-  label: string;
-  value: number;
-  hint: string;
-  accent?: boolean;
-}) {
+function SolicitudRow({ solicitud }: { solicitud: EmissionRequestRow }) {
   return (
-    <Card className={accent ? "border-accent/40" : undefined}>
-      <CardContent className="px-4 py-5 text-center">
-        <div className="font-heading text-3xl font-semibold text-foreground tnum">{value}</div>
-        <div className="mt-1 text-sm font-medium text-foreground">{label}</div>
-        <div className="text-xs text-muted-foreground">{hint}</div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function BonoRowItem({
-  bono,
-  tenedor,
-  puedeColocar,
-}: {
-  bono: BonoRow;
-  tenedor?: string;
-  puedeColocar: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-      <div className="text-sm">
+    <div className="px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-medium text-foreground">
-          Serie {bono.serie} · #{bono.numero}
+          Serie {solicitud.serie} · {solicitud.cantidad} bonos
         </span>
-        <span className="ml-2 text-muted-foreground">Tenedor: {tenedor ?? "—"}</span>
+        <RequestBadge estado={solicitud.estado} />
       </div>
-      <div className="flex items-center gap-3">
-        <EstadoBadge estado={bono.estado} />
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/bono/${bono.token_id}`}>
-            <History className="size-4" />
-            Historial
-          </Link>
-        </Button>
-        {puedeColocar && (
-          <Button asChild size="sm">
-            <Link href={`/partido/transferir/${bono.token_id}`}>
-              <ArrowRightLeft className="size-4" />
-              Colocar
-            </Link>
-          </Button>
-        )}
-      </div>
+      <p className="mt-1 text-sm text-muted-foreground tnum">
+        {colones(solicitud.valor_nominal)} nominal · {fmtFecha(solicitud.requested_at)}
+      </p>
+      {solicitud.motivo_rechazo && (
+        <p className="mt-1 text-sm text-destructive">Motivo: {solicitud.motivo_rechazo}</p>
+      )}
     </div>
   );
+}
+
+function RequestBadge({ estado }: { estado: EmissionRequestRow["estado"] }) {
+  const variant =
+    estado === "RECHAZADA" ? "destructive" : estado === "APROBADA" ? "secondary" : "outline";
+  return <Badge variant={variant}>{estado}</Badge>;
 }

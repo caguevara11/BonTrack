@@ -28,6 +28,16 @@ export function fmtFecha(ts: string | number): string {
   });
 }
 
+/** Como fmtFecha pero solo la fecha (sin hora) — para vistas de un vistazo. */
+export function fmtFechaCorta(ts: string | number): string {
+  const d = typeof ts === "number" ? new Date(ts * 1000) : new Date(ts);
+  return d.toLocaleDateString("es-CR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 /** Acorta una llave pública Stellar: GABC…WXYZ. */
 export function shortKey(pk: string): string {
   return `${pk.slice(0, 6)}…${pk.slice(-4)}`;

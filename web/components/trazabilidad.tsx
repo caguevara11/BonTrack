@@ -15,9 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Reveal } from "@/components/reveal";
-import { ResultadoBono } from "@/components/bono-result";
-import type { TrazabilidadResponse } from "@/app/api/trazabilidad/route";
+import { ResultadoBonoGrid } from "@/components/bono-result";
+import { SerieHeader } from "@/components/bono-cartera";
+import type { Resultado, TrazabilidadResponse } from "@/app/api/trazabilidad/route";
 
 type Modo = "bono" | "cedula";
 type Catalogo = { partidos: string[]; series: string[] };
@@ -65,6 +65,17 @@ export function TrazabilidadSearch() {
 
   const resultados = busqueda.data?.resultados;
   const pagination = busqueda.data?.pagination;
+
+  // Agrupa la página actual por partido+serie (los resultados ya vienen ordenados
+  // así). El partido se rotula en el encabezado solo si la página mezcla varios.
+  const grupos: { key: string; partido: string; serie: string; items: Resultado[] }[] = [];
+  for (const r of resultados ?? []) {
+    const key = `${r.bono.partido}␟${r.bono.serie}`;
+    const last = grupos[grupos.length - 1];
+    if (last && last.key === key) last.items.push(r);
+    else grupos.push({ key, partido: r.bono.partido, serie: r.bono.serie, items: [r] });
+  }
+  const multiPartido = new Set((resultados ?? []).map((r) => r.bono.partido)).size > 1;
 
   return (
     <div className="space-y-6">
@@ -205,11 +216,24 @@ export function TrazabilidadSearch() {
         </div>
       )}
 
-      {resultados?.map((r, i) => (
-        <Reveal key={r.bono.token_id} index={i}>
-          <ResultadoBono resultado={r} />
-        </Reveal>
-      ))}
+      {resultados && resultados.length > 0 && (
+        <div className="space-y-5">
+          {grupos.map((g) => (
+            <section key={g.key}>
+              <SerieHeader
+                serie={g.serie}
+                partido={multiPartido ? g.partido : undefined}
+                count={g.items.length}
+              />
+              <div className="bono-grid-fit">
+                {g.items.map((r) => (
+                  <ResultadoBonoGrid key={r.bono.token_id} resultado={r} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

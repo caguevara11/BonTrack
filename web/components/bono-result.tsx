@@ -1,19 +1,8 @@
-import {
-  ArrowRightLeft,
-  CalendarDays,
-  ChevronDown,
-  CircleDollarSign,
-  ExternalLink,
-  Hash,
-  Landmark,
-  ShieldCheck,
-  Stamp,
-  TriangleAlert,
-  UserRound,
-} from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import Link from "next/link";
+import { ArrowRightLeft, ExternalLink, History, Landmark, Stamp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { EstadoBadge } from "@/components/estado-badge";
-import { colones, fmtFecha, bonoLabel } from "@/lib/utils";
+import { colones, fmtFecha } from "@/lib/utils";
 import type { Resultado } from "@/app/api/trazabilidad/route";
 import type { EventoRow } from "@/lib/db";
 
@@ -77,113 +66,58 @@ export function CustodyTimeline({ eventos, serie }: { eventos: EventoRow[]; seri
   );
 }
 
-/** Tarjeta de resultado de trazabilidad: datos del bono + historial (TSE-3 / PUB-1). */
-export function ResultadoBono({ resultado }: { resultado: Resultado }) {
+/**
+ * Versión grid de la búsqueda: misma estética de tarjeta que la cartera. Lidera
+ * con el número (la serie va en el encabezado de grupo) y trunca el partido para
+ * que nada se salga del cuadro.
+ */
+export function ResultadoBonoGrid({ resultado }: { resultado: Resultado }) {
   const { bono, eventos } = resultado;
   const tenedorActual = eventos[0]?.to_label ?? "—";
-  const verificacion = resultado.verificacion;
-  const transferencias = eventos.filter((ev) => ev.tipo !== "EMISION").length;
+  const movimientos = eventos.filter((ev) => ev.tipo !== "EMISION").length;
 
   return (
-    <Card className="bono-result overflow-hidden">
-      <CardContent className="p-0">
-        <div className="relative border-b border-border bg-card px-4 py-4 sm:px-5">
-          <div className="absolute inset-y-0 left-0 w-1 bg-accent" aria-hidden />
-          <div className="flex flex-wrap items-start justify-between gap-3 pl-2">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs font-medium uppercase tracking-widest text-accent-foreground/70">
-                  {bonoLabel(bono.partido, bono.serie, bono.numero)}
-                </span>
-                <EstadoBadge estado={bono.estado} />
-              </div>
-              <h3 className="mt-1 font-heading text-lg font-semibold leading-tight text-foreground">
-                {bono.partido} · Serie {bono.serie} · Bono #{bono.numero}
-              </h3>
-            </div>
-            <div className="rounded-md border border-border bg-secondary/55 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              {transferencias} {transferencias === 1 ? "movimiento" : "movimientos"}
-            </div>
-          </div>
+    <article className="cq group flex min-w-0 flex-col rounded-xl bg-card text-card-foreground shadow-panel ring-1 ring-foreground/10 transition-shadow hover:shadow-lg">
+      <div className="border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-xs font-semibold uppercase tracking-wide text-accent-foreground/70">
+            Bono #{bono.numero}
+          </span>
+          <EstadoBadge estado={bono.estado} />
         </div>
+        <h3
+          className="mt-1 line-clamp-2 font-heading text-base font-semibold leading-tight text-foreground"
+          title={bono.partido}
+        >
+          {bono.partido}
+        </h3>
+      </div>
 
-        <div className="bono-result-body px-4 py-4 sm:px-5">
-          <dl className="bono-result-facts grid gap-2">
-            <Fact icon={CircleDollarSign} label="Valor nominal" value={colones(bono.valor_nominal)} />
-            <Fact icon={UserRound} label="Tenedor actual" value={tenedorActual} />
-            <Fact icon={CalendarDays} label="Emisión" value={bono.fecha_emision} />
-          </dl>
+      <dl className="min-w-0 space-y-1 px-4 py-3 text-sm tnum">
+        <RowMini label="Valor nominal" value={colones(bono.valor_nominal)} />
+        <RowMini label="Tenedor" value={tenedorActual} />
+        <RowMini label="Movimientos" value={String(movimientos)} />
+      </dl>
 
-          <div className="mt-4 divide-y divide-border rounded-lg border border-border bg-secondary/25">
-            <details className="bono-disclosure group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-sm font-medium text-foreground marker:hidden">
-                <span className="inline-flex min-w-0 items-center gap-2">
-                  <Hash className="size-4 shrink-0 text-primary" />
-                  <span>Ver historial de custodia</span>
-                </span>
-                <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
-              <div className="bono-disclosure-panel px-3.5 pb-4 pt-1">
-                <CustodyTimeline eventos={eventos} serie={bono.serie} />
-              </div>
-            </details>
-
-            {verificacion && (
-              <details className="bono-disclosure group">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-sm font-medium text-foreground marker:hidden">
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    {verificacion.ok ? (
-                      <ShieldCheck className="size-4 shrink-0 text-colocado-foreground" />
-                    ) : (
-                      <TriangleAlert className="size-4 shrink-0 text-destructive" />
-                    )}
-                    <span>{verificacion.ok ? "Ver verificación en cadena" : "Revisar alerta de cadena"}</span>
-                  </span>
-                  <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-                </summary>
-                <div
-                  className={
-                    verificacion.ok
-                      ? "bono-disclosure-panel px-3.5 pb-4 pt-1 text-sm text-colocado-foreground"
-                      : "bono-disclosure-panel px-3.5 pb-4 pt-1 text-sm text-destructive"
-                  }
-                >
-                  <p className="font-medium">
-                    {verificacion.ok
-                      ? "Índice verificado contra la cadena"
-                      : "El índice no coincide con la cadena"}
-                  </p>
-                  {!verificacion.ok && (
-                    <p className="mt-1 text-xs">
-                      Diferencias: {verificacion.diferencias.join(", ")}
-                    </p>
-                  )}
-                </div>
-              </details>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      <div className="mt-auto border-t border-border px-4 py-3">
+        <Button asChild variant="outline" size="sm" className="w-full">
+          <Link href={`/bono/${bono.token_id}`}>
+            <History className="size-4" />
+            Ver historial
+          </Link>
+        </Button>
+      </div>
+    </article>
   );
 }
 
-function Fact({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof CircleDollarSign;
-  label: string;
-  value: string;
-}) {
+function RowMini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2.5">
-      <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        <Icon className="size-3.5 text-primary" />
-        {label}
-      </dt>
-      <dd className="mt-1 break-words text-sm font-semibold text-foreground tnum">{value}</dd>
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="whitespace-nowrap text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 truncate text-right font-medium text-foreground" title={value}>
+        {value}
+      </dd>
     </div>
   );
 }
