@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { History, ArrowRightLeft, Inbox, Wallet, Coins, Vote } from "lucide-react";
 import { getCurrentActor } from "@/lib/auth";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import { getBonosByOwner, getEventosByTokenIds } from "@/lib/db";
+import { getBonosByOwner, getEventosByTokenIds, type BonoRow } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EstadoBadge } from "@/components/estado-badge";
@@ -11,6 +11,7 @@ import { SiteHeader } from "@/components/site-chrome";
 import { LogoutButton } from "@/components/logout-button";
 import { Reveal } from "@/components/reveal";
 import { Shell, KpiBand, Stat } from "@/components/dashboard";
+import { BonoCartera, type CarteraItem } from "@/components/bono-cartera";
 import { colones, fmtFechaCorta, bonoLabel } from "@/lib/utils";
 
 export const metadata = { title: "Mis bonos · BonTrack" };
@@ -85,71 +86,96 @@ export default async function TenedorPage() {
             </Reveal>
 
             <Reveal index={2}>
-              <div className="bono-grid">
-                {conAdquisicion.map(({ bono, fechaAdquisicion, precioPagado, desc }) => (
-                  <article
-                    key={bono.token_id}
-                    className="cq group rounded-xl bg-card text-card-foreground shadow-panel ring-1 ring-foreground/10 transition-shadow hover:shadow-lg"
-                  >
-                    <div className="border-b border-border px-4 py-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="font-mono text-xs uppercase tracking-widest text-accent-foreground/70">
-                          {bonoLabel(bono.partido, bono.serie, bono.numero)}
-                        </div>
-                        <EstadoBadge estado={bono.estado} />
-                      </div>
-                      <h3 className="mt-1 font-heading text-base font-semibold leading-tight text-foreground">
-                        {bono.partido}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        Serie {bono.serie} · Bono #{bono.numero}
-                      </p>
-                    </div>
-
-                    <dl className="space-y-1 px-4 py-3 text-sm tnum">
-                      <Row label="Valor nominal" value={colones(bono.valor_nominal)} />
-                      {fechaAdquisicion && (
-                        <Row label="En mi poder desde" value={fmtFechaCorta(fechaAdquisicion)} />
-                      )}
-                      {precioPagado != null && (
-                        <Row
-                          label="Pagué"
-                          value={
-                            <>
-                              {colones(precioPagado)}
-                              {desc != null && desc > 0 && (
-                                <span className="ml-1 text-xs text-muted-foreground/80">
-                                  (desc. {desc}%)
-                                </span>
-                              )}
-                            </>
-                          }
-                        />
-                      )}
-                    </dl>
-
-                    <div className="flex gap-2 border-t border-border px-4 py-3">
-                      <Button asChild variant="outline" size="sm" className="flex-1">
-                        <Link href={`/bono/${bono.token_id}`}>
-                          <History className="size-4" />
-                          Historial
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm" className="flex-1">
-                        <Link href={`/tenedor/transferir/${bono.token_id}`}>
-                          <ArrowRightLeft className="size-4" />
-                          Transferir
-                        </Link>
-                      </Button>
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <BonoCartera
+                layout="grid"
+                emptyLabel="No hay bonos en esta vista."
+                items={conAdquisicion.map(
+                  ({ bono, fechaAdquisicion, precioPagado, desc }): CarteraItem => ({
+                    tokenId: bono.token_id,
+                    serie: bono.serie,
+                    estado: bono.estado,
+                    partido: bono.partido,
+                    node: (
+                      <TenedorBonoCard
+                        key={bono.token_id}
+                        bono={bono}
+                        fechaAdquisicion={fechaAdquisicion}
+                        precioPagado={precioPagado}
+                        desc={desc}
+                      />
+                    ),
+                  }),
+                )}
+              />
             </Reveal>
           </>
         )}
       </Shell>
     </div>
+  );
+}
+
+function TenedorBonoCard({
+  bono,
+  fechaAdquisicion,
+  precioPagado,
+  desc,
+}: {
+  bono: BonoRow;
+  fechaAdquisicion: string | null;
+  precioPagado: number | null;
+  desc: number | null;
+}) {
+  return (
+    <article className="cq group rounded-xl bg-card text-card-foreground shadow-panel ring-1 ring-foreground/10 transition-shadow hover:shadow-lg">
+      <div className="border-b border-border px-4 py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="font-mono text-xs uppercase tracking-widest text-accent-foreground/70">
+            {bonoLabel(bono.partido, bono.serie, bono.numero)}
+          </div>
+          <EstadoBadge estado={bono.estado} />
+        </div>
+        <h3 className="mt-1 font-heading text-base font-semibold leading-tight text-foreground">
+          {bono.partido}
+        </h3>
+        <p className="text-sm text-muted-foreground">Bono #{bono.numero}</p>
+      </div>
+
+      <dl className="space-y-1 px-4 py-3 text-sm tnum">
+        <Row label="Valor nominal" value={colones(bono.valor_nominal)} />
+        {fechaAdquisicion && (
+          <Row label="En mi poder desde" value={fmtFechaCorta(fechaAdquisicion)} />
+        )}
+        {precioPagado != null && (
+          <Row
+            label="Pagué"
+            value={
+              <>
+                {colones(precioPagado)}
+                {desc != null && desc > 0 && (
+                  <span className="ml-1 text-xs text-muted-foreground/80">(desc. {desc}%)</span>
+                )}
+              </>
+            }
+          />
+        )}
+      </dl>
+
+      <div className="flex gap-2 border-t border-border px-4 py-3">
+        <Button asChild variant="outline" size="sm" className="flex-1">
+          <Link href={`/bono/${bono.token_id}`}>
+            <History className="size-4" />
+            Historial
+          </Link>
+        </Button>
+        <Button asChild size="sm" className="flex-1">
+          <Link href={`/tenedor/transferir/${bono.token_id}`}>
+            <ArrowRightLeft className="size-4" />
+            Transferir
+          </Link>
+        </Button>
+      </div>
+    </article>
   );
 }
 
