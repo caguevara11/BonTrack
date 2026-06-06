@@ -1,6 +1,6 @@
 # BonTrack
 
-BonTrack es un prototipo para digitalizar y dar trazabilidad en tiempo real a los
+BonTrack es una plataforma para digitalizar y dar trazabilidad en tiempo real a los
 certificados de cesion de deuda politica del sistema electoral costarricense. El
 objetivo del MVP es claro: convertir una auditoria que hoy puede tomar 8-9 meses
 de digitacion y cruce manual en una consulta publica de segundos.
