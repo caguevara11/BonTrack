@@ -17,5 +17,9 @@ build/
 coverage/
 *.tsbuildinfo
 
+# local demo artifacts
+web/DEMO-GUION*.md
+web/scripts/add-party.mjs
+
 # OS/editor noise
 .DS_Store
