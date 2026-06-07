@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/bontrack-logo.svg" alt="BonTrack - Trazabilidad | Transparencia" width="720">
+</p>
+
 # BonTrack
 
 BonTrack es una plataforma para digitalizar y dar trazabilidad en tiempo real a los
