@@ -1,13 +1,16 @@
 {
   "name": "bontrack",
   "private": true,
+  "workspaces": [
+    "web"
+  ],
   "scripts": {
-    "dev": "npm --prefix web run dev",
-    "build": "npm --prefix web run build",
-    "start": "npm --prefix web run start",
-    "lint": "npm --prefix web run lint",
-    "install:web": "npm --prefix web install",
-    "reconcile": "npm --prefix web run reconcile"
+    "dev": "npm --workspace web run dev",
+    "build": "npm --workspace web run build",
+    "start": "npm --workspace web run start",
+    "lint": "npm --workspace web run lint",
+    "install:web": "npm --workspace web install",
+    "reconcile": "npm --workspace web run reconcile"
   },
   "devDependencies": {
     "playwright": "^1.60.0"
